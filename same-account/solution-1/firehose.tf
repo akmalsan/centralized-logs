@@ -1,9 +1,8 @@
-# Create S3 bucket for data backup and error logs
+# Create S3 bucket for data delivery
 resource "aws_s3_bucket" "bucket" {
-  bucket        = "firehose-solution-1"
+  bucket        = var.bucket_name
   force_destroy = true
-
-  tags = var.tags
+  tags          = var.tags
 }
 
 resource "aws_s3_bucket_acl" "bucket_acl" {
@@ -13,8 +12,7 @@ resource "aws_s3_bucket_acl" "bucket_acl" {
 
 # Create role and policies for Firehose
 resource "aws_iam_role" "firehose_role" {
-  name = "firehose_solution_1"
-
+  name               = "firehose_same_account_solution_1"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -32,8 +30,8 @@ resource "aws_iam_role" "firehose_role" {
 EOF
 }
 
-resource "aws_iam_policy" "firehose_policy" {
-  name   = "Firehose_Solution_1"
+resource "aws_iam_policy" "firehose_s3" {
+  name   = "Firehose_S3"
   policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -99,7 +97,7 @@ resource "aws_iam_policy" "firehose_policy" {
               "lambda:GetFunctionConfiguration"
             ],
             "Resource": [
-              "${aws_lambda_function.lambda_function.arn}:*"
+              "${aws_lambda_function.data_transform.arn}:*"
             ]
         }
   ]
@@ -109,13 +107,12 @@ EOF
 
 resource "aws_iam_role_policy_attachment" "firehose_s3" {
   role       = aws_iam_role.firehose_role.name
-  policy_arn = aws_iam_policy.firehose_policy.arn
+  policy_arn = aws_iam_policy.firehose_s3.arn
 }
 
 # Create CloudWatch Log Group and Stream for Firehose logging
 resource "aws_cloudwatch_log_group" "firehose_group" {
-  name = "/aws/kinesisfirehose/firehose-solution-1"
-
+  name = "/aws/kinesisfirehose/test-same-account-solution-1"
   tags = var.tags
 }
 
@@ -125,8 +122,8 @@ resource "aws_cloudwatch_log_stream" "firehose_stream" {
 }
 
 # Create Firehose delivery stream
-resource "aws_kinesis_firehose_delivery_stream" "solution_1_stream" {
-  name        = "solution-1-stream"
+resource "aws_kinesis_firehose_delivery_stream" "test_stream" {
+  name        = "same-account-solution-1"
   destination = "elasticsearch"
 
   s3_configuration {
@@ -150,15 +147,19 @@ resource "aws_kinesis_firehose_delivery_stream" "solution_1_stream" {
     buffering_interval = 60
     s3_backup_mode     = "AllDocuments"
 
+    cloudwatch_logging_options {
+      enabled         = true
+      log_group_name  = aws_cloudwatch_log_group.firehose_group.name
+      log_stream_name = aws_cloudwatch_log_stream.firehose_stream.name
+    }
+
     processing_configuration {
       enabled = "true"
-
       processors {
         type = "Lambda"
-
         parameters {
-          parametername  = "LambdaArn"
-          parametervalue = aws_lambda_function.lambda_function.arn
+          parameter_name  = "LambdaArn"
+          parameter_value = "${aws_lambda_function.data_transform.arn}:$LATEST"
         }
       }
     }

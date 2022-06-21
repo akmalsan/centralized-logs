@@ -7,7 +7,7 @@ variable "tags" {
   description = "A map of tags to add to all resources"
   type        = map(string)
   default = {
-    "ManagedBy" = "Terraform",
+    "ManagedBy" = "Terraform"
     "Solution"  = "1"
   }
 }
@@ -53,5 +53,9 @@ variable "user_name" {
 }
 
 variable "password" {
+  type = string
+}
+
+variable "bucket_name" {
   type = string
 }
